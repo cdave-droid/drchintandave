@@ -111,6 +111,22 @@ export const FloatingNavbar: React.FC = () => {
                 )}
               </span>
             </a>
+            <a
+              href="/clinical/mortality"
+              className={`transition-all duration-300 text-md font-bold relative group ${
+                pathname === "/clinical/mortality"
+                  ? "text-[var(--dark-blue)]"
+                  : "text-[var(--text-medium)] hover:text-[var(--dark-blue)]"
+              }`}
+            >
+              <span className="relative">
+                Clinical Tools
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--accent-blue)] transition-all duration-300 group-hover:w-full rounded-full"></span>
+                {pathname === "/clinical/mortality" && (
+                  <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-[var(--accent-blue)] rounded-full" />
+                )}
+              </span>
+            </a>
 
             {/* Social Media Icons */}
             <div className="flex items-center space-x-3 ml-6">
@@ -257,6 +273,22 @@ export const FloatingNavbar: React.FC = () => {
               Media
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--accent-blue)] transition-all duration-300 group-hover:w-full rounded-full"></span>
               {pathname === "/media" && (
+                <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-[var(--accent-blue)] rounded-full" />
+              )}
+            </span>
+          </a>
+          <a
+            href="/clinical/mortality"
+            className={`transition-all duration-300 text-sm font-medium relative group ${
+              pathname === "/clinical/mortality"
+                ? "text-[var(--dark-blue)]"
+                : "text-[var(--text-medium)] hover:text-[var(--dark-blue)]"
+            }`}
+          >
+            <span className="relative">
+              Clinical Tools
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--accent-blue)] transition-all duration-300 group-hover:w-full rounded-full"></span>
+              {pathname === "/clinical/mortality" && (
                 <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-[var(--accent-blue)] rounded-full" />
               )}
             </span>

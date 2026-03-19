@@ -1,0 +1,37 @@
+/* MortPred clinical tool — scoped dark theme.
+   Applied via .mortpred-dark class on the page wrapper so it
+   doesn't leak into the rest of the light-themed site. */
+
+.mortpred-dark {
+  --mp-bg: #0a0a0f;
+  --mp-bg-card: #18181b;
+  --mp-fg: #e4e4e7;
+  --mp-border: #27272a;
+  --mp-muted: #71717a;
+  --mp-primary: #6366f1;
+  --mp-primary-fg: #ffffff;
+  --mp-accent: #818cf8;
+  --mp-destructive: #ef4444;
+  --mp-warning: #f59e0b;
+  --mp-success: #22c55e;
+
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+}
+
+/* Input styling within the dark scope */
+.mortpred-dark input[type="number"],
+.mortpred-dark input[type="text"],
+.mortpred-dark select {
+  background: var(--mp-bg);
+  border-color: var(--mp-border);
+  color: var(--mp-fg);
+}
+
+.mortpred-dark input[type="number"]:focus,
+.mortpred-dark input[type="text"]:focus,
+.mortpred-dark select:focus {
+  outline: none;
+  border-color: var(--mp-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
