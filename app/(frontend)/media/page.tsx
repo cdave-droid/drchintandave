@@ -6,6 +6,7 @@ import { Footer } from "@/components/footer";
 import { Calendar, User, Tag, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import BlogCard from "./blog-card";
+import ExternalMediaCard from "./external-media-card";
 import ShinyText from "@/components/ui/shiny-text";
 import { Metadata } from "next";
 
@@ -81,58 +82,19 @@ export default async function MediaPage() {
       {/* Blog Posts */}
       <section className="relative z-10 pb-20 px-4">
         <div className="max-w-6xl mx-auto">
-          {posts.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {posts.map((post, index) => (
                 <BlogCard key={post.id} post={post} index={index} />
               ))}
+              <ExternalMediaCard
+                title="Is AI Transforming the Future of Healthcare?"
+                excerpt="Dr. Chintan Dave joins Al Jazeera's The Stream to discuss how artificial intelligence is reshaping healthcare and what it means for the future of medicine."
+                source="Al Jazeera - The Stream"
+                date="2025-08-01"
+                url="https://www.aljazeera.com/video/the-stream/2025/8/1/is-ai-transforming-the-future-of"
+                index={posts.length}
+              />
             </div>
-          ) : (
-            <div className="text-center py-20">
-              <div
-                className="backdrop-blur-2xl rounded-3xl p-12 shadow-2xl border max-w-2xl mx-auto"
-                style={{
-                  background: "rgba(255, 255, 255, 0.15)",
-                  borderColor: "rgba(255, 255, 255, 0.2)",
-                  boxShadow: `
-                    0 8px 32px rgba(0, 0, 0, 0.1),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
-                  `,
-                }}
-              >
-                <h3 className="text-2xl font-bold text-[var(--dark-blue)] mb-4">
-                  No posts yet
-                </h3>
-                <p className="text-[var(--dark-blue)]/70 mb-6">
-                  Check back soon for new content! You can create posts in the
-                  admin panel.
-                </p>
-                <div className="text-left">
-                  <h4 className="font-semibold mb-3 text-[var(--dark-blue)]">
-                    Features Available:
-                  </h4>
-                  <ul className="text-sm text-[var(--dark-blue)]/70 space-y-2">
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-[var(--accent-blue)] rounded-full"></div>
-                      Rich text editor for content
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-[var(--accent-blue)] rounded-full"></div>
-                      Image uploads and management
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-[var(--accent-blue)] rounded-full"></div>
-                      Tags and categories
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-[var(--accent-blue)] rounded-full"></div>
-                      Draft and published status
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
