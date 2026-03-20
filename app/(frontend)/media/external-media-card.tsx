@@ -11,6 +11,8 @@ interface ExternalMediaCardProps {
   date: string;
   url: string;
   index: number;
+  image?: string;
+  imageAlt?: string;
 }
 
 export default function ExternalMediaCard({
@@ -20,6 +22,8 @@ export default function ExternalMediaCard({
   date,
   url,
   index,
+  image,
+  imageAlt,
 }: ExternalMediaCardProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -57,6 +61,16 @@ export default function ExternalMediaCard({
             borderWidth={2}
             variant="default"
           />
+
+          {image && (
+            <div className="mb-6 rounded-2xl overflow-hidden">
+              <img
+                src={image}
+                alt={imageAlt || title}
+                className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            </div>
+          )}
 
           <div className="space-y-4">
             <h3 className="text-xl font-bold text-[var(--dark-blue)] line-clamp-2 group-hover:text-[var(--accent-blue)] transition-colors">

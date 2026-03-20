@@ -92,6 +92,8 @@ export default async function MediaPage() {
                 source="Al Jazeera - The Stream"
                 date="2025-08-01"
                 url="https://www.aljazeera.com/video/the-stream/2025/8/1/is-ai-transforming-the-future-of"
+                image="/al_jazeera_stream.jpg"
+                imageAlt="Dr. Chintan Dave on Al Jazeera's The Stream discussing AI in healthcare"
                 index={posts.length}
               />
             </div>
