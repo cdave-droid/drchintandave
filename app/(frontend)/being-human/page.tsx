@@ -224,12 +224,6 @@ export default function BeingHumanPage() {
 
               {/* Order Details */}
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-2xl font-bold text-[var(--dark-blue)] mb-4">
-                    Order Now
-                  </h3>
-                </div>
-
                 <motion.a
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
