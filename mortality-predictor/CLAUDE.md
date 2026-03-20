@@ -8,8 +8,8 @@ This file captures all architectural decisions, design rationale, and implementa
 
 **MortPred** is a bedside clinical decision support tool for evidence-based mortality and outcome prediction. It is **not** FDA-cleared and should not be used as a sole diagnostic instrument.
 
-- **Frontend**: Next.js 16 (Turbopack), Tailwind CSS v4, Recharts — runs on `localhost:3001`
-- **Backend**: Python FastAPI — runs on `localhost:8000`
+- **Frontend**: Integrated into the main `drchintandave` Next.js 15 site at `/clinical/mortality`
+- **Backend**: Python FastAPI — runs on `localhost:8000` locally, deployed to Railway in production
 - **No database** — stateless, per-request predictions
 
 ### Running locally
@@ -18,40 +18,48 @@ This file captures all architectural decisions, design rationale, and implementa
 source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 
-# Frontend (from /frontend)
+# Frontend (from repo root /Users/chintandave/drchintandave)
 npm run dev
 ```
 
-Node.js ≥ 20.9.0 required (upgraded from 20.3.1 → 25.8.1 via Homebrew during session).
+Node.js ≥ 20.9.0 required (25.8.1 installed via Homebrew).
+
+### Production deployment
+- **Frontend**: Vercel (main drchintandave site). Set `NEXT_PUBLIC_MORTPRED_API_URL` to the Railway backend URL so the browser calls Railway directly (no Vercel timeout issue).
+- **Backend**: Railway. Root directory = `mortality-predictor/backend`. Config in `backend/railway.toml`.
+- **Backend env vars on Railway**: `ANTHROPIC_API_KEY`, `ALLOWED_ORIGINS` (comma-separated frontend origins)
+- **Frontend env vars on Vercel**: `NEXT_PUBLIC_MORTPRED_API_URL=https://your-app.railway.app`
 
 ---
 
 ## Architecture
 
 ```
-mortality-predictor/
-├── frontend/src/
-│   ├── app/page.tsx                   Main page — form + results
-│   ├── components/forms/patient-form.tsx
-│   ├── components/results/results-dashboard.tsx
-│   ├── components/results/organ-chart.tsx
-│   ├── lib/api.ts                     fetch wrapper → /api/predict
-│   └── types/patient.ts               TypeScript mirrors of Pydantic models
-│
+drchintandave/                          ← main Next.js 15 site (Vercel)
+├── app/(frontend)/clinical/mortality/  ← MortPred page (page.tsx + mortpred.css)
+├── lib/clinical/
+│   ├── utils.ts                        API client; reads NEXT_PUBLIC_MORTPRED_API_URL
+│   └── types.ts                        TypeScript types (mirrors backend Pydantic models)
+└── components/clinical/
+    ├── forms/patient-form.tsx
+    └── results/results-dashboard.tsx, organ-chart.tsx
+
+mortality-predictor/                    ← standalone backend repo subdirectory
 └── backend/app/
-    ├── main.py                        FastAPI app, CORS config
-    ├── models/patient.py              Pydantic models (all data shapes)
-    ├── routers/predict.py             POST /api/predict
-    ├── scoring/calculators.py         SOFA, APACHE II, MELD, CHA₂DS₂-VASc, CURB-65
-    ├── organ_models/compartment.py    ODE-based renal / cardiac / hepatic trajectories
-    ├── agents/research.py             LLM research agent (Anthropic / OpenAI / fallback)
+    ├── main.py                         FastAPI app; CORS reads ALLOWED_ORIGINS env var
+    ├── models/patient.py               Pydantic models (all data shapes)
+    ├── routers/predict.py              POST /api/predict
+    ├── scoring/calculators.py          SOFA, APACHE II, MELD, CHA₂DS₂-VASc, CURB-65
+    ├── organ_models/compartment.py     Coupled ODE organ models (renal/cardiac/hepatic)
+    ├── agents/research.py              LLM research agent (Anthropic / OpenAI / fallback)
     └── services/
-        ├── prediction.py              Main orchestration pipeline
-        └── baseline.py                Diagnosis-stratified mortality baselines
+        ├── prediction.py               Main orchestration pipeline
+        └── baseline.py                 Diagnosis-stratified mortality baselines
 ```
 
-### API proxy
-`next.config.ts` rewrites `/api/*` → `http://localhost:8000/api/*`, so the frontend never calls the backend directly by URL.
+### API routing
+- Locally: `next.config.js` rewrites `/api/predict` → `http://localhost:8000/api/predict`
+- Production: `lib/clinical/utils.ts` reads `NEXT_PUBLIC_MORTPRED_API_URL` (set in Vercel); if set, the browser calls Railway directly, bypassing Vercel's proxy entirely (avoids timeout)
 
 ---
 
@@ -61,11 +69,12 @@ Order of execution in `predict()`:
 
 1. **Compute clinical scores** — SOFA, APACHE II, MELD, CHA₂DS₂-VASc, CURB-65 (where applicable)
 2. **Run AI research agent** — returns `list[RiskFactor]` + narrative string
-3. **Derive composite mortality estimate** — average of all `score.mortality_estimate` values; used to calibrate organ model ODEs
-4. **Run organ models** — renal, cardiac, hepatic (if relevant labs/vitals present), each receives `mortality_estimate`
-5. **Get diagnosis-specific baseline** — from `baseline.py` (literature → LLM → admission-type fallback)
-6. **Compute outcome predictions** — log-linear model blending risk factors + clinical scores against the diagnosis baseline
-7. **Build response** — `PredictionResponse` with all fields including `baseline_info`
+3. **Derive composite mortality estimate** — average of all `score.mortality_estimate` values; retained for context but organ models now use patient-specific parameter fitting instead
+4. **Run organ models** — coupled ODE system (`run_organ_models(patient)`); patient-specific parameters fitted from actual labs/vitals/comorbidities
+5. **Feed organ trajectories back into risk factors** — `_organ_severity_adjustment(organ_outputs)` appends projected organ deterioration as additional `RiskFactor` entries (e.g. "Projected AKI Progression", "Projected Refractory Shock")
+6. **Get diagnosis-specific baseline** — from `baseline.py` (literature → LLM → admission-type fallback)
+7. **Compute outcome predictions** — log-linear model blending risk factors + clinical scores against the diagnosis baseline
+8. **Build response** — `PredictionResponse` with all fields including `baseline_info`
 
 ---
 
@@ -105,6 +114,20 @@ n_patients: Optional[int]
 population_note: Optional[str]
 ```
 
+### `OrganModelOutput`
+```python
+organ_system: str               # "renal" | "cardiac" | "hepatic"
+trajectory_hours: list[float]
+trajectory_values: list[float]
+parameter_name: str
+parameter_unit: str
+summary: str
+severity_score: Optional[float]       # final organ severity 0–1
+peak_value: Optional[float]           # worst value during trajectory
+trend: Optional[str]                  # "worsening" | "improving" | "stable"
+coupling_effects: Optional[list[str]] # active cross-organ interactions e.g. ["Cardiorenal syndrome"]
+```
+
 ### `PredictionResponse`
 ```python
 patient_summary: str
@@ -120,28 +143,54 @@ baseline_info: Optional[BaselineInfo]
 
 ## Organ Models (`organ_models/compartment.py`)
 
-Three simplified ODE compartment models — renal (creatinine), cardiac (MAP), hepatic (bilirubin).
+Full coupled ODE system — renal (creatinine), cardiac (MAP), hepatic (bilirubin) — with cross-organ coupling terms and patient-specific parameter fitting.
 
-### Key design decision: mortality-calibrated ODEs
-All three models accept `mortality_estimate: float` (0–1), derived from the composite clinical score average. This grounds the ODE trajectories in population-level outcomes:
+### Patient-specific parameter fitting
+Each organ system has a dedicated `_fit_*_params()` function that derives parameters from actual patient data:
 
-- **`recovery_rate`** is multiplied by `(1 - mortality_estimate)` — high-mortality patients have near-zero recovery
-- **`impaired_clearance`** is further reduced by `(1 - mortality_estimate * 0.5)`
-- **Cardiac drag** is amplified by `(1 + mortality_estimate)`
+- **Renal** (`RenalParams`): creatinine → KDIGO severity; age-adjusted GFR decline (Lindeman 1985); CKD stage reduces baseline clearance; dialysis adds severity; BMI adjusts production; diabetes reduces recovery; lactate/procalcitonin further reduce recovery
+- **Cardiac** (`CardiacParams`): MAP/SBP/DBP → severity; CHF subtype (HFrEF/HFpEF/general) adds severity; vasopressor count → pressor_effect; troponin/BNP elevation add severity; lactate >4 adds deterioration term
+- **Hepatic** (`HepaticParams`): bilirubin → severity; INR as synthetic function marker; albumin as chronic marker; cirrhosis adds severity; AST/ALT elevations increase production; sepsis markers reduce recovery
 
-**Before this change**: a SOFA-17 patient and a SOFA-2 patient with the same creatinine had identical renal trajectories.
-**After**: high-mortality patients trend toward deterioration; low-mortality patients recover toward baseline.
+### Cross-organ coupling (`_detect_coupling`)
+Four coupling interactions modelled (all sourced from literature):
+
+| Interaction | Trigger | Effect | Source |
+|---|---|---|---|
+| Cardiorenal | MAP < 70 or cardiac severity > 0.3 | Low MAP reduces renal clearance via sigmoid | Ronco, JACC 2008 |
+| Hepatorenal | Hepatic severity > 0.4 or cirrhosis | High bilirubin → renal vasoconstriction | Ginès, Hepatology 2003 |
+| Cardiohepatic | MAP < 65 or cardiac+hepatic severity | Low MAP → hepatic congestion | Alvarez & Mukherjee, Heart Failure Clin 2011 |
+| Renal-cardiac | Creatinine > 3.0 or renal severity > 0.6 | Uremia depresses myocardium | Hatamizadeh, Cardiorenal Med 2013 |
+
+### Simulation strategy
+- **2+ organ systems with data** → full coupled 5-state ODE (`coupled_ode`): state vector `[creatinine, renal_clearance, MAP, bilirubin, hepatic_clearance]`
+- **< 2 organ systems** → independent models (`_run_independent_models`) — same ODEs but without cross-organ terms
+- Solver failure → fallback to independent models
+
+### Organ trajectory → risk factors (`_organ_severity_adjustment`)
+After simulation, projected trajectory endpoints feed back into the mortality calculation as additional `RiskFactor` entries:
+
+| Condition | RR | Source |
+|---|---|---|
+| Creatinine rises >1.5× and >2.0 mg/dL | 1.8 | Chertow, JASN 2005 |
+| Creatinine projected >4.0 mg/dL | 2.5 | Chertow, JASN 2005 |
+| MAP projected <55 mmHg | 3.0 | Varpula, Crit Care 2005 |
+| MAP projected 55–60 mmHg | 2.0 | Varpula, Crit Care 2005 |
+| Bilirubin rises >2× and >3.0 mg/dL | 1.6 | Kramer & Jordan, Crit Care Med 2007 |
+| Bilirubin projected >12 mg/dL | 2.2 | Kramer & Jordan, Crit Care Med 2007 |
+| ≥3 organ systems worsening | 2.0 | Vincent, JAMA 2001 (SOFA trajectory) |
+| 2 organ systems worsening | 1.5 | Vincent, JAMA 2001 |
 
 ### Organ models only run when relevant data is present
 - Renal: only if `labs.creatinine` is provided
-- Cardiac: only if `vitals.mean_arterial_pressure` or `vitals.heart_rate` is provided
+- Cardiac: only if `vitals.mean_arterial_pressure`, `vitals.heart_rate`, or `vitals.systolic_bp` is provided
 - Hepatic: only if `labs.bilirubin_total` is provided
 
 ---
 
 ## Baseline Mortality Service (`services/baseline.py`)
 
-Replaces the original hardcoded admission-type averages with a three-tier lookup:
+Three-tier lookup replacing the original hardcoded admission-type averages:
 
 ### Tier 1: Literature match (40+ diagnoses)
 Keyword matching against `_LITERATURE` — a list of `_Entry` objects, each with:
@@ -154,7 +203,7 @@ Keyword matching against `_LITERATURE` — a list of `_Entry` objects, each with
 **Matching is two-pass**: first tries entries that also match severity keywords (e.g. "shock"), then falls back to general entries.
 
 ### Tier 2: LLM agent lookup
-If no literature match, and an API key is configured (`ANTHROPIC_API_KEY` or `LLM_API_KEY`), calls the LLM with a strict prompt requiring a specific cited study and verbatim finding. Returns `match_method="llm"`.
+If no literature match and an API key is configured (`ANTHROPIC_API_KEY` or `LLM_API_KEY`), calls the LLM with a strict prompt requiring a specific cited study and verbatim finding. Returns `match_method="llm"`.
 
 ### Tier 3: Admission-type fallback
 Original behaviour — broad averages by admission type. Returns `match_method="fallback"`.
@@ -200,7 +249,7 @@ Original behaviour — broad averages by admission type. Returns `match_method="
 
 ## Risk Factor Evidence Standards
 
-Every `RiskFactor` now carries:
+Every `RiskFactor` carries:
 - `evidence_timeframe` — the period the RR/OR was actually assessed at in the source study
 - `primary_finding` — verbatim statistic from the paper (e.g. `"HR 1.46 (95% CI 1.39–1.54)"`)
 
@@ -233,17 +282,18 @@ Every `RiskFactor` now carries:
 - **90-day outcomes**: `is_extrapolated = True` with note explaining that risk-factor RRs (SOFA, APACHE II, comorbidities) are mostly validated at 30-day/in-hospital endpoints
 - **1-year outcomes**: `is_extrapolated = True` with stronger note about post-discharge factors not captured
 
-The 90d and 1yr **baselines** are now independently sourced from literature (not scaled multiples of 30d), so only the risk-factor adjustments on top carry the extrapolation caveat.
+The 90d and 1yr **baselines** are independently sourced from literature (not scaled multiples of 30d), so only the risk-factor adjustments on top carry the extrapolation caveat.
 
 ---
 
 ## Frontend Evidence Display
 
-The results dashboard (`results-dashboard.tsx`) shows:
+The results dashboard (`components/clinical/results/results-dashboard.tsx`) shows:
 
 1. **Baseline Mortality Source card** — above outcome cards, shows `match_method` badge (green = published literature, blue = AI lookup, yellow = population estimate), source, verbatim finding in monospace box, population note and N
 2. **Outcome cards** — yellow "Extrapolated" badge on 90d/1yr with inline note
 3. **Risk Factor Breakdown table** — expandable, columns: Factor | Effect (RR% + raw RR) | Evidence Period | Confidence | Source + `primary_finding` in a highlighted monospace box
+4. **Organ Model Projections** — rendered by `organ-chart.tsx`; summary includes cross-organ coupling effects if active
 
 ---
 
@@ -263,22 +313,30 @@ The `FallbackAgent` is fully functional and production-ready for offline use.
 
 ## Things to be aware of / known limitations
 
-1. **Organ model ODEs are simplified approximations** — cross-organ coupling (cardiorenal syndrome, hepatorenal syndrome) is not modelled; each organ is independent
+1. **Organ trajectory → risk factor feedback loop is one-directional** — organ model runs first using patient labs, then its endpoints become risk factors; there is no iterative convergence between the mortality estimate and the organ trajectories
 2. **Risk factor RRs are applied multiplicatively in log-odds space** — this can over-estimate risk in patients with many comorbidities; the current cap is `combined_rr ≤ 20x`
 3. **Baseline matching is keyword-based** — a diagnosis like "multiorgan failure secondary to pneumonia" will match "pneumonia" not "sepsis"; consider adding diagnosis normalisation
 4. **The 90d/1yr risk-factor adjustments are still extrapolated** — the baselines are sourced independently but the RR multipliers from SOFA/APACHE II are validated only in-hospital
 5. **No sex-specific baseline adjustment yet** — some conditions (e.g. stroke, MI) have meaningful sex differences in short-term mortality that are not accounted for
+6. **Cross-organ coupling parameters are semi-empirical** — the sigmoid midpoints and coupling strengths are physiologically motivated but not individually calibrated to a validation dataset
 
 ---
 
 ## Session history summary
 
-This project was built and iteratively improved across a single session:
-
+**Session 1** — initial build and evidence improvements:
 - Fixed `@tailwindcss/postcss` missing from frontend `node_modules` (root-level lockfile conflict)
 - Upgraded Node.js 20.3.1 → 25.8.1 via Homebrew (Next.js 16 requires ≥20.9.0)
 - Connected organ model ODEs to population-level mortality via `mortality_estimate` parameter
 - Added `evidence_timeframe` and `primary_finding` to all risk factors
 - Added `is_extrapolated` + `extrapolation_note` to outcome predictions
-- Replaced hardcoded admission-type baselines with a 40+ diagnosis literature lookup (`baseline.py`)
+- Replaced hardcoded admission-type baselines with 40+ diagnosis literature lookup (`baseline.py`)
 - All baselines verified and corrected against research agent findings (key corrections: CAP-ICU 22%→28%, PE 7%→11.4%, ICH 38%→40.4%, DKA 0.7%→0.4%, cirrhosis 20%→10%)
+
+**Session 2** — deployment prep and organ model upgrade:
+- Added Railway deployment config (`backend/railway.toml`)
+- Updated CORS to read `ALLOWED_ORIGINS` env var (comma-separated, configurable per environment)
+- Merged upstream organ model rewrite: full coupled ODE system with patient-specific parameter fitting (RenalParams, CardiacParams, HepaticParams dataclasses), cross-organ coupling (cardiorenal, hepatorenal, cardiohepatic, renal-cardiac), and `_organ_severity_adjustment` feeding projected trajectory endpoints back into risk factors
+- `OrganModelOutput` extended with `severity_score`, `peak_value`, `trend`, `coupling_effects` fields
+- Production routing: `NEXT_PUBLIC_MORTPRED_API_URL` in Vercel points browser directly to Railway, bypassing Vercel proxy timeout
+- Git identity configured: `cdave@qmed.ca` / Chintan Dave
