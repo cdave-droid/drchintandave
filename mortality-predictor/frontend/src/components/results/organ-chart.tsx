@@ -21,6 +21,39 @@ const ORGAN_COLORS: Record<string, string> = {
   hepatic: "#22c55e",
 };
 
+function SeverityBadge({ score }: { score: number }) {
+  let color: string;
+  let label: string;
+  if (score >= 0.7) {
+    color = "bg-red-500/20 text-red-400 border-red-500/30";
+    label = "Severe";
+  } else if (score >= 0.4) {
+    color = "bg-orange-500/20 text-orange-400 border-orange-500/30";
+    label = "Moderate";
+  } else if (score >= 0.15) {
+    color = "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    label = "Mild";
+  } else {
+    color = "bg-green-500/20 text-green-400 border-green-500/30";
+    label = "Normal";
+  }
+  return (
+    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${color}`}>
+      {label}
+    </span>
+  );
+}
+
+function TrendArrow({ trend }: { trend: string }) {
+  if (trend === "worsening") {
+    return <span className="text-red-400 text-xs" title="Worsening">&#9650;</span>;
+  }
+  if (trend === "improving") {
+    return <span className="text-green-400 text-xs" title="Improving">&#9660;</span>;
+  }
+  return <span className="text-zinc-400 text-xs" title="Stable">&#9654;</span>;
+}
+
 export function OrganChart({ model }: Props) {
   const color = ORGAN_COLORS[model.organ_system] || "#6366f1";
 
@@ -38,12 +71,30 @@ export function OrganChart({ model }: Props) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold text-sm capitalize">
-          {model.organ_system} — {model.parameter_name}
-        </h4>
+        <div className="flex items-center gap-2">
+          <h4 className="font-semibold text-sm capitalize">
+            {model.organ_system} — {model.parameter_name}
+          </h4>
+          {model.trend && <TrendArrow trend={model.trend} />}
+          {model.severity_score != null && (
+            <SeverityBadge score={model.severity_score} />
+          )}
+        </div>
         <span className="text-xs text-muted">{model.parameter_unit}</span>
       </div>
-      <p className="text-xs text-muted mb-3">{model.summary}</p>
+      <p className="text-xs text-muted mb-1">{model.summary}</p>
+      {model.coupling_effects && model.coupling_effects.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {model.coupling_effects.map((effect) => (
+            <span
+              key={effect}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/25"
+            >
+              {effect}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={sampled}>

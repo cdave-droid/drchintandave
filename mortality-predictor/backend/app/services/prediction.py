@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.agents.research import get_agent
 from app.models.patient import (
+    OrganModelOutput,
     OutcomePrediction,
     OutcomeType,
     PatientInput,
@@ -76,6 +77,104 @@ OUTCOME_COMORBIDITY_MODIFIERS: dict[str, dict[str, float]] = {
         "cirrhosis": 5.0, "hepatitis_b": 2.0, "hepatitis_c": 2.0,
     },
 }
+
+
+def _organ_severity_adjustment(organ_outputs: list[OrganModelOutput]) -> list[RiskFactor]:
+    """Convert organ model trajectory endpoints into risk factors.
+
+    This feeds organ model predictions back into the mortality calculation,
+    so projected organ deterioration influences the final score.
+    """
+    risk_factors: list[RiskFactor] = []
+    worsening_count = 0
+
+    for organ in organ_outputs:
+        if not organ.trajectory_values or len(organ.trajectory_values) < 2:
+            continue
+
+        initial = organ.trajectory_values[0]
+        final = organ.trajectory_values[-1]
+
+        if organ.organ_system == "renal":
+            # Chertow et al., JASN 2005: small Cr rises associated with mortality
+            if final > initial * 1.5 and final > 2.0:
+                risk_factors.append(RiskFactor(
+                    factor_name="Projected AKI Progression",
+                    description=f"Creatinine projected to rise from {initial:.1f} to {final:.1f} mg/dL",
+                    relative_risk=1.8,
+                    confidence="moderate",
+                    source="Chertow et al., JASN 2005",
+                ))
+                worsening_count += 1
+            if final > 4.0:
+                risk_factors.append(RiskFactor(
+                    factor_name="Projected Severe Renal Failure",
+                    description=f"Creatinine projected to reach {final:.1f} mg/dL",
+                    relative_risk=2.5,
+                    confidence="moderate",
+                    source="Chertow et al., JASN 2005",
+                ))
+
+        elif organ.organ_system == "cardiac":
+            # Varpula et al., Crit Care 2005: MAP time below 65 predicts mortality
+            if final < 55:
+                risk_factors.append(RiskFactor(
+                    factor_name="Projected Refractory Shock",
+                    description=f"MAP projected to reach {final:.0f} mmHg",
+                    relative_risk=3.0,
+                    confidence="moderate",
+                    source="Varpula et al., Crit Care 2005",
+                ))
+                worsening_count += 1
+            elif final < 60:
+                risk_factors.append(RiskFactor(
+                    factor_name="Projected Hemodynamic Instability",
+                    description=f"MAP projected to reach {final:.0f} mmHg",
+                    relative_risk=2.0,
+                    confidence="moderate",
+                    source="Varpula et al., Crit Care 2005",
+                ))
+                worsening_count += 1
+
+        elif organ.organ_system == "hepatic":
+            # Kramer & Jordan, Crit Care Med 2007
+            if final > initial * 2.0 and final > 3.0:
+                risk_factors.append(RiskFactor(
+                    factor_name="Projected Hepatic Deterioration",
+                    description=f"Bilirubin projected to rise from {initial:.1f} to {final:.1f} mg/dL",
+                    relative_risk=1.6,
+                    confidence="moderate",
+                    source="Kramer & Jordan, Crit Care Med 2007",
+                ))
+                worsening_count += 1
+            if final > 12.0:
+                risk_factors.append(RiskFactor(
+                    factor_name="Projected Severe Liver Failure",
+                    description=f"Bilirubin projected to reach {final:.1f} mg/dL",
+                    relative_risk=2.2,
+                    confidence="moderate",
+                    source="Kramer & Jordan, Crit Care Med 2007",
+                ))
+
+    # Multi-organ failure synergy (Vincent et al., JAMA 2001)
+    if worsening_count >= 3:
+        risk_factors.append(RiskFactor(
+            factor_name="Multi-Organ Trajectory Decline",
+            description=f"All {worsening_count} modeled organ systems show projected worsening",
+            relative_risk=2.0,
+            confidence="moderate",
+            source="Vincent et al., JAMA 2001 (SOFA trajectory)",
+        ))
+    elif worsening_count >= 2:
+        risk_factors.append(RiskFactor(
+            factor_name="Multi-Organ Trajectory Decline",
+            description=f"{worsening_count} organ systems show projected worsening",
+            relative_risk=1.5,
+            confidence="moderate",
+            source="Vincent et al., JAMA 2001 (SOFA trajectory)",
+        ))
+
+    return risk_factors
 
 
 def _compute_combined_risk(
@@ -175,6 +274,10 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
 
     # 3. Run organ models
     organ_outputs = run_organ_models(patient)
+
+    # 3b. Feed organ trajectory endpoints back into risk factors
+    organ_risk_factors = _organ_severity_adjustment(organ_outputs)
+    risk_factors.extend(organ_risk_factors)
 
     # 4. Compute outcome predictions
     outcomes: list[OutcomePrediction] = []

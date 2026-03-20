@@ -135,6 +135,10 @@ export interface OrganModelOutput {
   parameter_name: string;
   parameter_unit: string;
   summary: string;
+  severity_score?: number;
+  peak_value?: number;
+  trend?: "worsening" | "improving" | "stable";
+  coupling_effects?: string[];
 }
 
 export interface PredictionResponse {

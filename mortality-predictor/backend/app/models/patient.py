@@ -191,6 +191,10 @@ class OrganModelOutput(BaseModel):
     parameter_name: str
     parameter_unit: str
     summary: str
+    severity_score: Optional[float] = Field(None, ge=0, le=1, description="Final organ severity 0-1")
+    peak_value: Optional[float] = Field(None, description="Worst value during trajectory")
+    trend: Optional[str] = Field(None, description="worsening, improving, or stable")
+    coupling_effects: Optional[list[str]] = Field(None, description="Active cross-organ interactions")
 
 
 class PredictionResponse(BaseModel):
