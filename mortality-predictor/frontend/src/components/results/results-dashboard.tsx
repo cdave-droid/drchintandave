@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Activity,
+  Database,
 } from "lucide-react";
 import { OrganChart } from "./organ-chart";
 
@@ -69,6 +70,43 @@ export function ResultsDashboard({ response, onBack }: Props) {
         </div>
       )}
 
+      {/* Baseline Provenance */}
+      {response.baseline_info && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex items-start gap-2">
+            <Database className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold">Baseline Mortality Source</span>
+                <span className={`px-1.5 py-0.5 rounded text-xs border font-medium ${
+                  response.baseline_info.match_method === "literature"
+                    ? "border-green-500/40 bg-green-500/10 text-green-400"
+                    : response.baseline_info.match_method === "llm"
+                    ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                    : "border-yellow-500/40 bg-yellow-500/10 text-yellow-400"
+                }`}>
+                  {response.baseline_info.match_method === "literature" ? "Published literature"
+                    : response.baseline_info.match_method === "llm" ? "AI literature lookup"
+                    : "Population estimate"}
+                </span>
+              </div>
+              <p className="text-xs text-muted mt-1">{response.baseline_info.source}</p>
+              <p className="text-xs text-foreground/70 mt-1 font-mono bg-primary/5 border border-primary/20 rounded px-2 py-1">
+                {response.baseline_info.primary_finding}
+              </p>
+              {(response.baseline_info.population_note || response.baseline_info.n_patients) && (
+                <p className="text-xs text-muted mt-1">
+                  {response.baseline_info.population_note}
+                  {response.baseline_info.n_patients && (
+                    <span className="ml-1">(N={response.baseline_info.n_patients.toLocaleString()})</span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Outcome Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {response.outcomes.map((outcome) => (
@@ -76,9 +114,19 @@ export function ResultsDashboard({ response, onBack }: Props) {
             key={outcome.outcome_type}
             className={`rounded-lg border p-4 ${getRiskBgColor(outcome.probability_mid)}`}
           >
-            <h3 className="text-sm font-semibold mb-1">
-              {OUTCOME_LABELS[outcome.outcome_type]}
-            </h3>
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <h3 className="text-sm font-semibold">
+                {OUTCOME_LABELS[outcome.outcome_type]}
+              </h3>
+              {outcome.is_extrapolated && (
+                <span
+                  className="shrink-0 px-1.5 py-0.5 rounded text-xs border border-yellow-500/40 bg-yellow-500/10 text-yellow-400 font-medium"
+                  title={outcome.extrapolation_note ?? "Extrapolated from shorter-term evidence"}
+                >
+                  Extrapolated
+                </span>
+              )}
+            </div>
             <div className="flex items-baseline gap-2">
               <span
                 className={`text-3xl font-mono font-bold ${getRiskColor(outcome.probability_mid)}`}
@@ -115,6 +163,11 @@ export function ResultsDashboard({ response, onBack }: Props) {
                 </div>
               )}
             </div>
+            {outcome.is_extrapolated && outcome.extrapolation_note && (
+              <p className="mt-2 text-xs text-yellow-400/70 leading-snug">
+                {outcome.extrapolation_note}
+              </p>
+            )}
             {/* Risk factor count per outcome */}
             {outcome.risk_factors.length > 0 && (
               <div className="mt-2 text-xs text-muted">
@@ -166,6 +219,7 @@ export function ResultsDashboard({ response, onBack }: Props) {
                     <tr className="border-b border-border text-muted text-xs">
                       <th className="text-left py-2 pr-4">Factor</th>
                       <th className="text-left py-2 pr-4">Effect</th>
+                      <th className="text-left py-2 pr-4">Evidence Period</th>
                       <th className="text-left py-2 pr-4">Confidence</th>
                       <th className="text-left py-2">Source</th>
                     </tr>
@@ -204,6 +258,15 @@ export function ResultsDashboard({ response, onBack }: Props) {
                               RR {factor.relative_risk.toFixed(2)}
                             </span>
                           </td>
+                          <td className="py-3 pr-4 whitespace-nowrap">
+                            {factor.evidence_timeframe ? (
+                              <span className="px-2 py-0.5 rounded text-xs border border-border text-muted">
+                                {factor.evidence_timeframe}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted/40">—</span>
+                            )}
+                          </td>
                           <td className="py-3 pr-4">
                             <span
                               className={`px-2 py-0.5 rounded text-xs border ${getConfidenceBadgeColor(factor.confidence)}`}
@@ -212,11 +275,14 @@ export function ResultsDashboard({ response, onBack }: Props) {
                             </span>
                           </td>
                           <td className="py-3 text-xs text-muted max-w-xs">
-                            {factor.source}
+                            <div>{factor.source}</div>
                             {factor.calculator_name && (
-                              <span className="ml-1 text-accent">
-                                [{factor.calculator_name}]
-                              </span>
+                              <span className="text-accent">[{factor.calculator_name}]</span>
+                            )}
+                            {factor.primary_finding && (
+                              <div className="mt-1.5 px-2 py-1 rounded bg-primary/5 border border-primary/20 text-foreground/70 font-mono text-xs leading-snug">
+                                {factor.primary_finding}
+                              </div>
                             )}
                           </td>
                         </tr>

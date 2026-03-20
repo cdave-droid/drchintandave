@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.agents.research import get_agent
 from app.models.patient import (
+    BaselineInfo,
     OrganModelOutput,
     OutcomePrediction,
     OutcomeType,
@@ -14,6 +15,7 @@ from app.models.patient import (
 )
 from app.organ_models.compartment import run_organ_models
 from app.scoring.calculators import ScoreResult, compute_all_applicable
+from app.services.baseline import get_baseline
 
 
 DISCLAIMERS = [
@@ -24,13 +26,6 @@ DISCLAIMERS = [
     "Organ model trajectories are simplified approximations and should be interpreted with caution.",
 ]
 
-# Baseline mortality rates by admission type (approximate population averages)
-BASELINE_MORTALITY = {
-    "icu": {"mortality_30d": 0.15, "mortality_90d": 0.22, "mortality_1yr": 0.30},
-    "floor": {"mortality_30d": 0.03, "mortality_90d": 0.06, "mortality_1yr": 0.10},
-    "ed": {"mortality_30d": 0.02, "mortality_90d": 0.04, "mortality_1yr": 0.08},
-    "outpatient": {"mortality_30d": 0.001, "mortality_90d": 0.003, "mortality_1yr": 0.008},
-}
 
 # Baseline rates for non-mortality outcomes
 BASELINE_OUTCOMES = {
@@ -272,35 +267,52 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
     agent = get_agent()
     risk_factors, narrative = await agent.analyze_mortality_factors(patient, clinical_scores_dict)
 
-    # 3. Run organ models
+    # 3. Derive composite mortality estimate from clinical scores to calibrate organ models.
+    # Uses the average of all score-based mortality estimates (SOFA, APACHE II, MELD, etc.)
+    # as a single scalar that grounds ODE recovery/clearance rates in validated outcomes.
+    score_mortalities = [s.mortality_estimate for s in score_results if s.mortality_estimate is not None]
+    composite_mortality = sum(score_mortalities) / len(score_mortalities) if score_mortalities else 0.0
+
+    # 4. Run organ models (coupled ODE system — calibrated by patient-specific parameters)
     organ_outputs = run_organ_models(patient)
 
-    # 3b. Feed organ trajectory endpoints back into risk factors
+    # 4b. Feed organ trajectory endpoints back into risk factors
     organ_risk_factors = _organ_severity_adjustment(organ_outputs)
     risk_factors.extend(organ_risk_factors)
 
-    # 4. Compute outcome predictions
+    # 5. Compute outcome predictions
     outcomes: list[OutcomePrediction] = []
-    admission = patient.diagnosis.admission_type.value
-    baselines = BASELINE_MORTALITY.get(admission, BASELINE_MORTALITY["floor"])
+    diagnosis_baseline = await get_baseline(patient)
+    baseline_by_timeframe = {
+        OutcomeType.MORTALITY_30D: diagnosis_baseline.mortality_30d,
+        OutcomeType.MORTALITY_90D: diagnosis_baseline.mortality_90d,
+        OutcomeType.MORTALITY_1YR: diagnosis_baseline.mortality_1yr,
+    }
 
     for outcome_type in request.selected_outcomes:
         if outcome_type.value.startswith("mortality_"):
-            baseline = baselines.get(outcome_type.value, 0.05)
+            baseline = baseline_by_timeframe.get(outcome_type, 0.05)
             low, mid, high = _compute_combined_risk(baseline, risk_factors, score_results)
 
-            # Adjust for timeframe
+            is_extrapolated = False
+            extrapolation_note = None
+
+            # Flag extrapolated timeframes — 90d/1yr baselines are from literature
+            # but the risk-factor RRs applied on top are mostly 30d/in-hospital evidence
             if outcome_type == OutcomeType.MORTALITY_90D:
-                # 90-day is roughly 1.4x 30-day
-                if OutcomeType.MORTALITY_30D in request.selected_outcomes:
-                    low = min(low * 1.4, 0.99)
-                    mid = min(mid * 1.4, 0.99)
-                    high = min(high * 1.4, 0.99)
+                is_extrapolated = True
+                extrapolation_note = (
+                    "90-day baseline is from published literature for this diagnosis. "
+                    "Risk-factor adjustments (SOFA, APACHE II, comorbidity RRs) are primarily "
+                    "validated at 30-day / in-hospital endpoints — 90-day estimate carries higher uncertainty."
+                )
             elif outcome_type == OutcomeType.MORTALITY_1YR:
-                if OutcomeType.MORTALITY_30D in request.selected_outcomes:
-                    low = min(low * 2.0, 0.99)
-                    mid = min(mid * 2.0, 0.99)
-                    high = min(high * 2.0, 0.99)
+                is_extrapolated = True
+                extrapolation_note = (
+                    "1-year baseline is from published literature for this diagnosis. "
+                    "Risk-factor adjustments are primarily validated at shorter timepoints. "
+                    "Long-term mortality is influenced by post-discharge factors not captured here."
+                )
 
             outcomes.append(OutcomePrediction(
                 outcome_type=outcome_type,
@@ -310,6 +322,8 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 baseline_probability=round(baseline, 3),
                 risk_factors=risk_factors,
                 clinical_scores=clinical_scores_dict,
+                is_extrapolated=is_extrapolated,
+                extrapolation_note=extrapolation_note,
             ))
         else:
             baseline, low, mid, high = _compute_outcome_probability(
@@ -325,7 +339,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 clinical_scores=clinical_scores_dict,
             ))
 
-    # 5. Build patient summary
+    # 6. Build patient summary
     summary_parts = [
         f"{patient.demographics.age}yo {patient.demographics.sex.value}",
         f"presenting with {patient.diagnosis.primary_diagnosis}",
@@ -342,4 +356,12 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
         evidence_narrative=narrative,
         disclaimers=DISCLAIMERS,
         clinical_scores_used=clinical_scores_dict,
+        baseline_info=BaselineInfo(
+            matched_diagnosis=diagnosis_baseline.matched_diagnosis,
+            match_method=diagnosis_baseline.match_method,
+            source=diagnosis_baseline.source,
+            primary_finding=diagnosis_baseline.primary_finding,
+            n_patients=diagnosis_baseline.n_patients,
+            population_note=diagnosis_baseline.population_note,
+        ),
     )

@@ -116,6 +116,8 @@ export interface RiskFactor {
   source: string;
   source_url?: string;
   calculator_name?: string;
+  evidence_timeframe?: string;
+  primary_finding?: string;
 }
 
 export interface OutcomePrediction {
@@ -126,6 +128,8 @@ export interface OutcomePrediction {
   baseline_probability: number;
   risk_factors: RiskFactor[];
   clinical_scores: Record<string, number>;
+  is_extrapolated: boolean;
+  extrapolation_note?: string;
 }
 
 export interface OrganModelOutput {
@@ -141,6 +145,15 @@ export interface OrganModelOutput {
   coupling_effects?: string[];
 }
 
+export interface BaselineInfo {
+  matched_diagnosis: string;
+  match_method: "literature" | "llm" | "fallback";
+  source: string;
+  primary_finding: string;
+  n_patients?: number;
+  population_note?: string;
+}
+
 export interface PredictionResponse {
   patient_summary: string;
   outcomes: OutcomePrediction[];
@@ -148,6 +161,7 @@ export interface PredictionResponse {
   evidence_narrative: string;
   disclaimers: string[];
   clinical_scores_used: Record<string, number>;
+  baseline_info?: BaselineInfo;
 }
 
 export const OUTCOME_LABELS: Record<OutcomeType, string> = {

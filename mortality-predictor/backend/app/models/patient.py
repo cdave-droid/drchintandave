@@ -165,6 +165,14 @@ class RiskFactor(BaseModel):
     source: str = Field(..., description="Citation or source")
     source_url: Optional[str] = None
     calculator_name: Optional[str] = Field(None, description="e.g. 'SOFA', 'APACHE II'")
+    evidence_timeframe: Optional[str] = Field(
+        None,
+        description="The outcome period the evidence was assessed at, e.g. '30-day', 'In-hospital', '1-year', 'Long-term'",
+    )
+    primary_finding: Optional[str] = Field(
+        None,
+        description="The exact statistic from the source paper, e.g. 'HR 1.46 (95% CI 1.39–1.54)' or 'OR 6.2 (95% CI 5.0–7.6)'",
+    )
 
 
 class OutcomePrediction(BaseModel):
@@ -179,6 +187,14 @@ class OutcomePrediction(BaseModel):
     clinical_scores: dict[str, float] = Field(
         default_factory=dict,
         description="Validated scores used, e.g. {'SOFA': 8, 'APACHE_II': 22}",
+    )
+    is_extrapolated: bool = Field(
+        default=False,
+        description="True when this timeframe was not directly assessed in the source evidence and has been extrapolated.",
+    )
+    extrapolation_note: Optional[str] = Field(
+        None,
+        description="Human-readable explanation of how the extrapolation was performed.",
     )
 
 
@@ -197,6 +213,17 @@ class OrganModelOutput(BaseModel):
     coupling_effects: Optional[list[str]] = Field(None, description="Active cross-organ interactions")
 
 
+class BaselineInfo(BaseModel):
+    """Provenance for the baseline mortality rate used in predictions."""
+
+    matched_diagnosis: str
+    match_method: str  # "literature", "llm", or "fallback"
+    source: str
+    primary_finding: str
+    n_patients: Optional[int] = None
+    population_note: Optional[str] = None
+
+
 class PredictionResponse(BaseModel):
     """Full prediction response returned to the frontend."""
 
@@ -206,3 +233,6 @@ class PredictionResponse(BaseModel):
     evidence_narrative: str = ""
     disclaimers: list[str] = Field(default_factory=list)
     clinical_scores_used: dict[str, float] = Field(default_factory=dict)
+    baseline_info: Optional[BaselineInfo] = Field(
+        None, description="Provenance of the baseline mortality rate used."
+    )

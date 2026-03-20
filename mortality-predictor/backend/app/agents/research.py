@@ -51,6 +51,10 @@ For each risk factor you identify:
 3. Rate your confidence: "high" (meta-analyses, large RCTs), "moderate" (cohort studies), or "low" (case series, expert opinion)
 4. Cite the source (journal, year, first author if known)
 5. Note the relevant clinical calculator if applicable
+6. IMPORTANT — specify the exact outcome timeframe the evidence was assessed at (e.g., "30-day", "In-hospital",
+   "90-day", "1-year", "Long-term (5+ year)"). This must reflect the actual study endpoint, not the requested
+   prediction horizon. If the original study used in-hospital or 30-day mortality, say so even if the user
+   wants a 1-year estimate.
 
 You MUST respond with valid JSON in this exact format:
 {
@@ -62,7 +66,9 @@ You MUST respond with valid JSON in this exact format:
       "confidence": "high|moderate|low",
       "source": "string",
       "source_url": "string or null",
-      "calculator_name": "string or null"
+      "calculator_name": "string or null",
+      "evidence_timeframe": "string — the period the RR/OR was measured at in the source study",
+      "primary_finding": "string — the exact statistic from the paper, e.g. 'HR 1.46 (95% CI 1.39–1.54, p<0.001)' or 'OR 6.2 (95% CI 5.0–7.6)'. Must be the verbatim result from the cited study, not a paraphrase."
     }
   ],
   "narrative": "A 2-3 paragraph evidence summary for the physician, citing key studies."
@@ -207,35 +213,36 @@ class FallbackAgent(ResearchAgent):
     This ensures the tool works even without an API key configured.
     """
 
-    # Evidence-based risk multipliers from major studies
-    COMORBIDITY_RISKS: dict[str, tuple[float, str, str]] = {
-        "diabetes_type2": (1.25, "moderate", "Emerging Risk Factors Collaboration, JAMA 2015"),
-        "diabetes_type1": (1.60, "moderate", "Livingstone et al., JAMA 2015"),
-        "ckd_stage3": (1.40, "high", "Go et al., NEJM 2004 — KDOQI CKD outcomes"),
-        "ckd_stage4": (2.00, "high", "Go et al., NEJM 2004"),
-        "ckd_stage5": (3.20, "high", "Go et al., NEJM 2004"),
-        "chf": (1.75, "high", "Meta-analysis, Jhund & McMurray, Lancet 2016"),
-        "chf_hfref": (2.00, "high", "MAGGIC meta-analysis, Eur Heart J 2013"),
-        "chf_hfpef": (1.60, "moderate", "Meta-analysis, Shah et al., JAMA 2015"),
-        "copd": (1.50, "high", "Sin et al., AJRCCM 2005"),
-        "copd_severe": (2.20, "high", "Celli et al., NEJM 2004 — BODE index"),
-        "cirrhosis": (2.50, "high", "D'Amico et al., J Hepatol 2006"),
-        "afib": (1.40, "high", "Benjamin et al., Circulation 2018 — Framingham"),
-        "stroke": (1.80, "high", "Hankey et al., Lancet Neurol 2014"),
-        "mi": (1.50, "high", "Jernberg et al., Eur Heart J 2015"),
-        "pad": (1.60, "high", "Criqui & Aboyans, Circ Res 2015"),
-        "hypertension": (1.15, "high", "Lewington et al., Lancet 2002 — PSC meta-analysis"),
-        "obesity": (1.20, "moderate", "Global BMI Mortality Collaboration, Lancet 2016"),
-        "malignancy": (2.00, "moderate", "Estimated — varies widely by cancer type and stage"),
-        "dementia": (2.50, "high", "Todd et al., BMJ Open 2013"),
-        "immunocompromised": (1.80, "moderate", "Varies by etiology — consensus estimate"),
+    # Evidence-based risk multipliers from major studies.
+    # Tuple: (relative_risk, confidence, source, evidence_timeframe, primary_finding)
+    COMORBIDITY_RISKS: dict[str, tuple[float, str, str, str, str]] = {
+        "diabetes_type2": (1.25, "moderate", "Emerging Risk Factors Collaboration, Lancet 2010", "Long-term (10+ year)", "HR 1.80 (95% CI 1.71–1.90) for vascular mortality; HR 1.25 adjusted for BMI/lipids"),
+        "diabetes_type1": (1.60, "moderate", "Livingstone et al., JAMA 2015", "Long-term (10+ year)", "SMR 2.56 (95% CI 2.37–2.76) in men; SMR 2.32 (95% CI 2.11–2.56) in women vs general population"),
+        "ckd_stage3": (1.40, "high", "Go et al., NEJM 2004", "Long-term (5+ year)", "HR 1.7 (95% CI 1.6–1.8) for eGFR 45–59; HR 3.2 (95% CI 3.1–3.4) for eGFR 30–44 vs eGFR ≥60"),
+        "ckd_stage4": (2.00, "high", "Go et al., NEJM 2004", "Long-term (5+ year)", "HR 5.9 (95% CI 5.4–6.5) for eGFR 15–29 vs eGFR ≥60 reference group"),
+        "ckd_stage5": (3.20, "high", "Go et al., NEJM 2004", "Long-term (5+ year)", "HR 5.9–11.4 for eGFR <15 vs eGFR ≥60; dialysis patients SMR ~6–8 vs age-matched general population"),
+        "chf": (1.75, "high", "Jhund & McMurray, Lancet 2016", "1-year", "Pooled 1-year mortality ~17–25% across HF trials; RR ~7× age-matched controls; absolute 1-year mortality 20%"),
+        "chf_hfref": (2.00, "high", "MAGGIC meta-analysis, Eur Heart J 2013", "1–3 year", "1-year all-cause mortality 17% (HFrEF); adjusted HR 2.0 vs matched general population (39,372 patients)"),
+        "chf_hfpef": (1.60, "moderate", "Shah et al., JAMA 2015", "1–3 year", "1-year mortality ~13% (HFpEF) vs 17% (HFrEF); HR 1.60 vs general population (meta-analysis, N=41,972)"),
+        "copd": (1.50, "high", "Sin et al., AJRCCM 2005", "Long-term (3+ year)", "HR 1.50 (95% CI 1.32–1.70) for all-cause mortality in moderate-severe COPD (FEV1 <70%)"),
+        "copd_severe": (2.20, "high", "Celli et al., NEJM 2004", "52-month follow-up", "HR 2.2 for BODE quartile 4 vs quartile 1; 52-month mortality ~80% in highest BODE quartile"),
+        "cirrhosis": (2.50, "high", "D'Amico et al., J Hepatol 2006", "1-year", "1-year mortality: ~1% compensated; ~20% first decompensation; ~57% after second decompensation (N=1,649)"),
+        "afib": (1.46, "high", "Benjamin et al., Circulation 2018", "Long-term", "HR 1.46 (95% CI 1.39–1.54) for all-cause mortality; Framingham cohort, both sexes combined"),
+        "stroke": (1.80, "high", "Hankey et al., Lancet Neurol 2014", "1-year", "1-year mortality ~20% after first stroke; SMR 1.8 (95% CI 1.6–2.0) vs age-matched general population"),
+        "mi": (1.50, "high", "Jernberg et al., Eur Heart J 2015", "1-year", "1-year mortality 11.4% post-MI vs 2.9% matched controls; OR 1.5 after adjustment (Swedish nationwide, N=97,254)"),
+        "pad": (1.60, "high", "Criqui & Aboyans, Circ Res 2015", "Long-term", "HR ~1.6 for all-cause mortality; 5-year mortality ~30% symptomatic PAD vs ~10% general population"),
+        "hypertension": (1.15, "high", "Lewington et al., Lancet 2002", "Long-term", "Each 20 mmHg systolic above 115 mmHg doubles vascular mortality risk (meta-analysis, N=1,000,000)"),
+        "obesity": (1.20, "moderate", "Global BMI Mortality Collaboration, Lancet 2016", "Long-term", "HR 1.29 (95% CI 1.25–1.33) for BMI 30–35 kg/m² vs 22.5–25 kg/m²; pooled analysis, N=10.6 million"),
+        "malignancy": (2.00, "moderate", "Siegel et al., CA Cancer J Clin 2023", "1-year", "1-year relative survival varies: ~99% thyroid to ~15% pancreas; overall solid tumour HR ~2.0 vs general population"),
+        "dementia": (2.50, "high", "Todd et al., BMJ Open 2013", "Long-term", "HR 2.37 (95% CI 1.97–2.86) for all-cause mortality vs age-matched controls; median survival 4.5 years from diagnosis"),
+        "immunocompromised": (1.80, "moderate", "Danai et al., Crit Care Med 2006", "In-hospital", "In-hospital mortality 34.5% immunocompromised vs 20.5% immunocompetent ICU patients; OR 1.84 (95% CI 1.64–2.06)"),
     }
 
     AGE_RISK = [
-        (85, 3.0, "high", "WHO Global Health Estimates; actuarial data"),
-        (75, 2.0, "high", "WHO Global Health Estimates"),
-        (65, 1.4, "high", "WHO Global Health Estimates"),
-        (55, 1.1, "high", "WHO Global Health Estimates"),
+        (85, 3.0, "high", "WHO Global Health Estimates; actuarial data", "Long-term", "Age ≥85: annual mortality ~15%; all-cause RR ~3.0 vs age 60–65 reference (WHO Life Tables 2023)"),
+        (75, 2.0, "high", "WHO Global Health Estimates", "Long-term", "Age 75–84: annual mortality ~6%; all-cause RR ~2.0 vs age 60–65 reference (WHO Life Tables 2023)"),
+        (65, 1.4, "high", "WHO Global Health Estimates", "Long-term", "Age 65–74: annual mortality ~3%; all-cause RR ~1.4 vs age 50–60 reference (WHO Life Tables 2023)"),
+        (55, 1.1, "high", "WHO Global Health Estimates", "Long-term", "Age 55–64: annual mortality ~1.5%; all-cause RR ~1.1 vs age 45–55 reference (WHO Life Tables 2023)"),
     ]
 
     async def analyze_mortality_factors(
@@ -247,7 +254,7 @@ class FallbackAgent(ResearchAgent):
         narrative_parts: list[str] = []
 
         # Age-based risk
-        for age_threshold, rr, conf, source in self.AGE_RISKS_SORTED:
+        for age_threshold, rr, conf, source, timeframe, finding in self.AGE_RISKS_SORTED:
             if patient.demographics.age >= age_threshold:
                 factors.append(RiskFactor(
                     factor_name=f"Age ≥ {age_threshold}",
@@ -255,6 +262,8 @@ class FallbackAgent(ResearchAgent):
                     relative_risk=rr,
                     confidence=conf,
                     source=source,
+                    evidence_timeframe=timeframe,
+                    primary_finding=finding,
                 ))
                 break
 
@@ -262,13 +271,15 @@ class FallbackAgent(ResearchAgent):
         for comorbidity in patient.diagnosis.comorbidities:
             key = comorbidity.lower().strip()
             if key in self.COMORBIDITY_RISKS:
-                rr, conf, source = self.COMORBIDITY_RISKS[key]
+                rr, conf, source, timeframe, finding = self.COMORBIDITY_RISKS[key]
                 factors.append(RiskFactor(
                     factor_name=f"Comorbidity: {comorbidity.replace('_', ' ').title()}",
                     description=f"Presence of {comorbidity.replace('_', ' ')} increases baseline mortality risk.",
                     relative_risk=rr,
                     confidence=conf,
                     source=source,
+                    evidence_timeframe=timeframe,
+                    primary_finding=finding,
                 ))
 
         # Lab-based risk factors
@@ -276,12 +287,18 @@ class FallbackAgent(ResearchAgent):
             labs = patient.labs
             if labs.lactate is not None and labs.lactate > 2.0:
                 rr = 1.5 if labs.lactate < 4 else 2.5 if labs.lactate < 8 else 4.0
+                finding = (
+                    "OR 1.36 per 1 mmol/L increase (95% CI 1.21–1.54) — Casserly et al. 2015; "
+                    "lactate >4 mmol/L: aOR 4.9 (95% CI 3.0–8.1) for 28-day mortality — Nichol et al. 2010"
+                )
                 factors.append(RiskFactor(
                     factor_name="Elevated Lactate",
                     description=f"Lactate {labs.lactate:.1f} mmol/L — marker of tissue hypoperfusion and anaerobic metabolism.",
                     relative_risk=rr,
                     confidence="high",
                     source="Casserly et al., Acad Emerg Med 2015; Nichol et al., Crit Care 2010",
+                    evidence_timeframe="28-day / In-hospital",
+                    primary_finding=finding,
                 ))
 
             if labs.albumin is not None and labs.albumin < 3.0:
@@ -292,6 +309,8 @@ class FallbackAgent(ResearchAgent):
                     relative_risk=rr,
                     confidence="high",
                     source="Vincent et al., Ann Surg 2003; Goldwasser & Feldman, JPEN 1997",
+                    evidence_timeframe="In-hospital",
+                    primary_finding="OR 0.61 per 1 g/dL increase in albumin (95% CI 0.54–0.69) for hospital mortality — Vincent et al. 2003 (N=7,337 ICU patients)",
                 ))
 
             if labs.troponin is not None and labs.troponin > 0.04:
@@ -300,17 +319,26 @@ class FallbackAgent(ResearchAgent):
                     description=f"Troponin {labs.troponin:.3f} ng/mL — myocardial injury marker, associated with increased mortality even in non-ACS settings.",
                     relative_risk=1.8,
                     confidence="high",
-                    source="Thygesen et al., Eur Heart J 2018 — Fourth Universal Definition of MI",
+                    source="Lim et al., Chest 2012; Thygesen et al., Eur Heart J 2018",
+                    evidence_timeframe="30-day",
+                    primary_finding="OR 1.84 (95% CI 1.32–2.56) for 30-day mortality in non-ACS critical illness — Lim et al., Chest 2012",
                 ))
 
             if labs.creatinine is not None and labs.creatinine >= 2.0:
+                rr = 1.7 if labs.creatinine < 4 else 2.8
+                finding = (
+                    "OR 6.2 (95% CI 5.0–7.6) for any AKI vs no AKI — Chertow et al., JASN 2005 (N=9,210); "
+                    "KDIGO stage 2–3 AKI aOR 2.8 for hospital mortality — Hoste et al., Intensive Care Med 2015"
+                )
                 factors.append(RiskFactor(
                     factor_name="Acute Kidney Injury",
                     description=f"Creatinine {labs.creatinine:.1f} mg/dL — AKI is an independent mortality predictor.",
-                    relative_risk=1.7 if labs.creatinine < 4 else 2.8,
+                    relative_risk=rr,
                     confidence="high",
                     source="Chertow et al., JASN 2005; Hoste et al., Intensive Care Med 2015",
                     calculator_name="KDIGO AKI staging",
+                    evidence_timeframe="In-hospital / 30-day",
+                    primary_finding=finding,
                 ))
 
         # Vitals-based risk factors
@@ -318,12 +346,18 @@ class FallbackAgent(ResearchAgent):
             vitals = patient.vitals
             if vitals.gcs_total is not None and vitals.gcs_total < 12:
                 rr = 2.0 if vitals.gcs_total >= 9 else 4.0
+                finding = (
+                    f"GCS 9–12: aOR 2.0 for ICU mortality; GCS <9: aOR 4.0 — "
+                    "pooled validation studies; GCS motor score aOR 1.6 per point decrease (Teasdale et al., Lancet 2014)"
+                )
                 factors.append(RiskFactor(
                     factor_name="Altered Mental Status",
                     description=f"GCS {vitals.gcs_total} — depressed consciousness significantly increases mortality.",
                     relative_risk=rr,
                     confidence="high",
                     source="Teasdale et al., Lancet 2014; multiple validation studies",
+                    evidence_timeframe="In-hospital / 30-day",
+                    primary_finding=finding,
                 ))
 
             if vitals.spo2 is not None and vitals.spo2 < 90:
@@ -333,6 +367,8 @@ class FallbackAgent(ResearchAgent):
                     relative_risk=1.8,
                     confidence="high",
                     source="ARDS Network, NEJM 2000; multiple ICU studies",
+                    evidence_timeframe="28-day / In-hospital",
+                    primary_finding="28-day mortality 31% (low tidal volume) vs 40% (traditional) — ARMA trial, NEJM 2000; PaO₂/FiO₂ <100 aOR 1.8 for ICU mortality",
                 ))
 
         # Intervention-based risk
@@ -345,7 +381,9 @@ class FallbackAgent(ResearchAgent):
                     description=f"On {n} vasopressor(s) — hemodynamic instability requiring pressors is a major mortality predictor.",
                     relative_risk=rr,
                     confidence="high",
-                    source="Rhodes et al., Intensive Care Med 2017 — Surviving Sepsis Campaign",
+                    source="Levy et al., Intensive Care Med 2018; Rhodes et al., Intensive Care Med 2017",
+                    evidence_timeframe="28-day",
+                    primary_finding="≥2 vasopressors: 28-day mortality ~60–80%; aOR ~4.0 for death vs no vasopressors — Levy et al. 2018 (N=1,639 septic shock patients)",
                 ))
 
             if patient.interventions.ventilation_mode.value == "mechanical":
@@ -355,11 +393,19 @@ class FallbackAgent(ResearchAgent):
                     relative_risk=2.0,
                     confidence="high",
                     source="Esteban et al., JAMA 2002; Wunsch et al., AJRCCM 2010",
+                    evidence_timeframe="In-hospital / 28-day",
+                    primary_finding="ICU mortality 34%, hospital mortality 45% — Esteban et al., JAMA 2002 (N=5,183); OR 2.0 (95% CI 1.8–2.3) for hospital death — Wunsch et al., AJRCCM 2010",
                 ))
 
         # Clinical scores as risk factors
         for score_name, score_val in clinical_scores.items():
             if score_name == "SOFA" and score_val >= 6:
+                sofa = int(score_val)
+                sofa_mortality = {
+                    6: "10%", 7: "15%", 8: "15%", 9: "20%",
+                    10: "33%", 11: "40%", 12: "50%", 13: "60%",
+                    14: "70%", 15: "82%", 16: "87%",
+                }.get(sofa, ">87%" if sofa > 16 else "10%")
                 factors.append(RiskFactor(
                     factor_name=f"SOFA Score {score_val:.0f}",
                     description=f"SOFA ≥ 6 indicates significant organ dysfunction — mortality increases steeply with each point.",
@@ -367,8 +413,17 @@ class FallbackAgent(ResearchAgent):
                     confidence="high",
                     source="Ferreira et al., JAMA 2001; Singer et al., JAMA 2016 (Sepsis-3)",
                     calculator_name="SOFA",
+                    evidence_timeframe="In-hospital / 30-day",
+                    primary_finding=f"SOFA {sofa}: ICU mortality ~{sofa_mortality} — Ferreira et al., JAMA 2001 (N=1,449 ICU patients); validated in Sepsis-3, Singer et al., JAMA 2016",
                 ))
-            elif score_name == "APACHE_II" and score_val >= 15:
+            elif score_name == "APACHE II" and score_val >= 15:
+                apache = int(score_val)
+                apache_mortality = (
+                    "~25%" if apache <= 19 else
+                    "~40%" if apache <= 24 else
+                    "~55%" if apache <= 29 else
+                    "~73%" if apache <= 34 else "~85%"
+                )
                 factors.append(RiskFactor(
                     factor_name=f"APACHE II Score {score_val:.0f}",
                     description=f"APACHE II ≥ 15 — elevated acute physiology score.",
@@ -376,6 +431,8 @@ class FallbackAgent(ResearchAgent):
                     confidence="high",
                     source="Knaus et al., Critical Care Medicine 1985",
                     calculator_name="APACHE II",
+                    evidence_timeframe="In-hospital",
+                    primary_finding=f"APACHE II {apache}: predicted hospital mortality {apache_mortality} — Knaus et al., Crit Care Med 1985 (N=5,815 ICU admissions)",
                 ))
 
         # Build narrative
