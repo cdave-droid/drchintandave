@@ -1,19 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import {
   BookOpen,
-  Brain,
-  Heart,
-  Lightbulb,
-  Shield,
-  Users,
   ArrowRight,
-  Star,
-  Clock,
-  Package,
 } from "lucide-react";
 import { WavyBackground } from "@/components/ui/wavy-background";
 import { FloatingNavbar } from "@/components/floating-navbar";
@@ -22,67 +14,6 @@ import { GlowingEffect } from "@/components/ui/glowing-effect";
 import ShinyText from "@/components/ui/shiny-text";
 
 export default function BeingHumanPage() {
-  const [quantity, setQuantity] = useState(1);
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState<{
-    name: string;
-    email: string;
-    country: string;
-    timestamp: string;
-  }>({
-    name: "",
-    email: "",
-    country: "",
-    timestamp: "",
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState("");
-
-  const handlePreOrder = () => {
-    setShowForm(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitStatus("");
-
-    try {
-      const response = await fetch("/api/preorder", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          country: formData.country,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        setSubmitStatus("success");
-        setFormData({ name: "", email: "", country: "", timestamp: "" });
-        setTimeout(() => setShowForm(false), 2000);
-      } else {
-        setSubmitStatus("error");
-      }
-    } catch (error) {
-      setSubmitStatus("error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
   return (
     <main className="relative min-h-screen">
       <FloatingNavbar />
@@ -291,229 +222,31 @@ export default function BeingHumanPage() {
                 </div>
               </div>
 
-              {/* Pre-order Details */}
+              {/* Order Details */}
               <div className="space-y-6">
                 <div>
                   <h3 className="text-2xl font-bold text-[var(--dark-blue)] mb-4">
-                    Pre-Order Now
+                    Order Now
                   </h3>
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Star className="w-5 h-5 text-yellow-400" />
-                    <span className="text-[var(--dark-blue)]/70">
-                      Expected release by September 2025
-                    </span>
-                  </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-semibold text-[var(--dark-blue)]">
-                      Price
-                    </span>
-                    <span className="text-2xl font-bold text-[var(--accent-blue)]">
-                      $25.00
-                    </span>
-                  </div>
-
-                  {/* <div className="flex items-center justify-between">
-                    <span className="text-lg font-semibold text-[var(--dark-blue)]">
-                      Quantity
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="w-8 h-8 rounded-full bg-[var(--accent-blue)]/20 text-[var(--accent-blue)] flex items-center justify-center hover:bg-[var(--accent-blue)]/30 transition-colors"
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center font-semibold text-[var(--dark-blue)]">
-                        {quantity}
-                      </span>
-                      <button
-                        onClick={() => setQuantity(quantity + 1)}
-                        className="w-8 h-8 rounded-full bg-[var(--accent-blue)]/20 text-[var(--accent-blue)] flex items-center justify-center hover:bg-[var(--accent-blue)]/30 transition-colors"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div> */}
-
-                  {/* <div className="flex items-center space-x-2 text-[var(--dark-blue)]/70">
-                    <Clock className="w-4 h-4" />
-                    <span className="text-sm">
-                      Expected release by end of 2024
-                    </span>
-                  </div> */}
-                </div>
-
-                <motion.button
+                <motion.a
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={handlePreOrder}
+                  href="https://www.amazon.com/Being-Human-Age-AI-Consciously/dp/B0FXR7JFJV"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-full py-4 bg-gradient-to-r from-[var(--dark-blue)] to-[var(--dark-blue-light)] hover:from-[var(--dark-blue-light)] hover:to-[var(--dark-blue)] text-white font-semibold rounded-full transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
                 >
-                  <Package className="w-5 h-5" />
-                  <span>Pre-Order</span>
+                  <BookOpen className="w-5 h-5" />
+                  <span>Order Now</span>
                   <ArrowRight className="w-5 h-5" />
-                </motion.button>
-
-                <p className="text-xs text-[var(--dark-blue)]/60 text-center">
-                  Non-refundable. But if you really hate it, please send me a
-                  message so I can learn from your perspective and experience
-                  and arrive at a mutually-beneficial solution.
-                </p>
+                </motion.a>
               </div>
             </div>
           </motion.div>
         </div>
       </section>
-
-      {/* Pre-order Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl"
-          >
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-[var(--dark-blue)]">
-                Pre-Order Your Copy
-              </h3>
-              <button
-                onClick={() => setShowForm(false)}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label
-                  htmlFor="name"
-                  className="block text-sm font-medium text-[var(--dark-blue)] mb-2"
-                >
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--accent-blue)] focus:border-transparent transition-all"
-                  placeholder="Enter your full name"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium text-[var(--dark-blue)] mb-2"
-                >
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--accent-blue)] focus:border-transparent transition-all"
-                  placeholder="Enter your email address"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="country"
-                  className="block text-sm font-medium text-[var(--dark-blue)] mb-2"
-                >
-                  Country *
-                </label>
-                <input
-                  type="text"
-                  id="country"
-                  name="country"
-                  value={formData.country}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--accent-blue)] focus:border-transparent transition-all"
-                  placeholder="Enter your country"
-                />
-              </div>
-
-              {submitStatus === "success" && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-green-800 text-sm">
-                    Thank you! Your pre-order request has been submitted
-                    successfully.
-                  </p>
-                </div>
-              )}
-
-              {submitStatus === "error" && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-800 text-sm">
-                    There was an error submitting your request. Please try
-                    again.
-                  </p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 bg-gradient-to-r from-[var(--dark-blue)] to-[var(--dark-blue-light)] hover:from-[var(--dark-blue-light)] hover:to-[var(--dark-blue)] text-white font-semibold rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {isSubmitting ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Submitting...
-                  </>
-                ) : (
-                  "Submit Pre-Order Request"
-                )}
-              </button>
-            </form>
-          </motion.div>
-        </div>
-      )}
 
       <Footer />
     </main>
