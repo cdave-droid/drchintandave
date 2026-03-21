@@ -6,7 +6,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const AI_DOCTOR_ELO = 1350 // AI baseline ELO for ELO calculations
 
-export const AI_ELO = AI_DOCTOR_ELO
+const AI_ELO = AI_DOCTOR_ELO
 
 /** Ask the AI doctor to answer all questions for a case */
 export async function POST(req: NextRequest) {

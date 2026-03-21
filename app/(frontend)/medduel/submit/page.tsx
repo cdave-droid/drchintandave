@@ -64,7 +64,7 @@ export default function SubmitCasePage() {
         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-8 text-center">
           <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
           <p className="font-semibold text-emerald-300">{message}</p>
-          <p className="text-white/40 text-sm mt-2">We'll review it and add it to the rotation if approved.</p>
+          <p className="text-white/40 text-sm mt-2">We&apos;ll review it and add it to the rotation if approved.</p>
           <button
             onClick={() => setStatus('idle')}
             className="mt-4 px-4 py-2 text-sm bg-white/10 rounded-lg hover:bg-white/20 transition-colors"

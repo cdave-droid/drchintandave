@@ -81,7 +81,7 @@ export default function LeaderboardPage() {
         <div className="text-center py-12 text-white/30">
           <p>No players yet — be the first!</p>
           <Link href="/medduel" className="mt-3 inline-block text-emerald-400 text-sm hover:underline">
-            Play today's case
+            Play today&apos;s case
           </Link>
         </div>
       ) : (
