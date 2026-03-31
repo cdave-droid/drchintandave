@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -12,6 +12,7 @@ function checkAuth(req: NextRequest) {
 
 /** GET — list pending submissions or cases */
 export async function GET(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   if (!checkAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const type = req.nextUrl.searchParams.get('type') ?? 'submissions'
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
 
 /** POST — approve a submission: AI generates questions, then activates the case */
 export async function POST(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   if (!checkAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { submissionId, difficulty, specialty } = await req.json()
@@ -150,6 +152,7 @@ Generate 2-4 questions. Mix MCQ and open-ended. Make questions clinically releva
 
 /** DELETE — reject a submission */
 export async function DELETE(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   if (!checkAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { submissionId, reason } = await req.json()

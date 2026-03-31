@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import {
   getLevelInfo, getXPForCorrect, calculateELOChange, checkNewBadges, LEVELS,
 } from '@/lib/gamification'
@@ -8,6 +8,7 @@ const AI_DOCTOR_ELO = 1350
 
 /** GET — fetch or create a session by fingerprint */
 export async function GET(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   const fp = req.nextUrl.searchParams.get('fp')
   if (!fp) return NextResponse.json({ error: 'Missing fingerprint' }, { status: 400 })
 
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
 
 /** POST — submit an attempt and update session stats */
 export async function POST(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   try {
     const {
       fingerprint,
@@ -196,6 +198,7 @@ export async function POST(req: NextRequest) {
 
 /** PATCH — update display name */
 export async function PATCH(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   const { fingerprint, displayName } = await req.json()
   if (!fingerprint || !displayName) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })

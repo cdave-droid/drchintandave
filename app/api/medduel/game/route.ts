@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { MOCK_CASE } from '@/lib/gameTypes'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'placeholder'
-)
 
 // GET — fetch active case (or specific case by id, or ?demo=1 for mock)
 export async function GET(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   if (req.nextUrl.searchParams.get('demo') === '1') {
     return NextResponse.json({ case: MOCK_CASE, demo: true })
   }
@@ -33,6 +29,7 @@ export async function GET(req: NextRequest) {
 
 // POST — create a game session
 export async function POST(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   const { case_id, fingerprint, user_id, demo } = await req.json()
 
   if (demo) {
@@ -53,6 +50,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH — update session with stage data; calculate score when completed=true
 export async function PATCH(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   const body = await req.json()
   const { session_id, demo, ...updates } = body
 

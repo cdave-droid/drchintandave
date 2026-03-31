@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 /** GET — check if the user already attempted today's challenge */
 export async function GET(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   const fp = req.nextUrl.searchParams.get('fp')
   const challengeId = req.nextUrl.searchParams.get('challengeId')
 

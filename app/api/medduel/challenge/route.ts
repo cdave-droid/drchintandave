@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 /** GET /api/medduel/challenge — returns today's case with questions */
 export async function GET() {
+  const supabaseAdmin = getSupabaseAdmin()
   const today = new Date().toISOString().split('T')[0]
 
   // Try to get today's scheduled challenge

@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'placeholder'
-)
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 // POST /api/medduel/auth — register or login clinician
 export async function POST(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   const { email, display_name } = await req.json()
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -45,6 +41,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/medduel/auth — verify NPI for existing user
 export async function PATCH(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   const { user_id, npi_number } = await req.json()
 
   if (!user_id || !npi_number) {

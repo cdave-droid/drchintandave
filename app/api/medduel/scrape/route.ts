@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -64,6 +64,7 @@ Content: ${post.selftext.slice(0, 500)}`,
 
 /** POST — trigger a scrape run */
 export async function POST(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   const auth = req.headers.get('x-admin-secret')
   if (auth !== ADMIN_SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
 
 /** GET — check scrape status / stats */
 export async function GET(req: NextRequest) {
+  const supabaseAdmin = getSupabaseAdmin()
   const auth = req.headers.get('x-admin-secret')
   if (auth !== ADMIN_SECRET) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
