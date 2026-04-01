@@ -4,10 +4,10 @@ import { MOCK_CASE } from '@/lib/gameTypes'
 
 // GET — fetch active case (or specific case by id, or ?demo=1 for mock)
 export async function GET(req: NextRequest) {
-  const supabase = getSupabaseAdmin()
   if (req.nextUrl.searchParams.get('demo') === '1') {
     return NextResponse.json({ case: MOCK_CASE, demo: true })
   }
+  const supabase = getSupabaseAdmin()
 
   const caseId = req.nextUrl.searchParams.get('case_id')
 
