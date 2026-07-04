@@ -1,0 +1,16 @@
+{
+  "name": "content-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A team of 5 AI agents that run my content, with a dashboard and Telegram digest.",
+  "scripts": {
+    "pull": "node scripts/pull-data.js",
+    "digest": "node scripts/telegram-send.js",
+    "all": "node scripts/run-all.js"
+  },
+  "dependencies": {
+    "apify-client": "^2.9.3",
+    "dotenv": "^16.4.5"
+  }
+}
